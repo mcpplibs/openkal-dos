@@ -56,4 +56,21 @@ inline u32 transfer_size() { return self().h->tb_size; }
 
 void copy(void* to, const void* from, u32 n);
 
+// A handle's transfers through the transfer buffer (int 21h, 3Fh and 40h): a write of the whole
+// buffer a piece at a time, a read of at most the transfer buffer's size.
+long write_handle(u16 handle, const u8* p, unsigned long n);
+long read_handle(u16 handle, u8* p, unsigned long n);
+// Whether a file's handle was opened for appending (fs.cpp): each write is placed at the end.
+bool append_handle(u16 handle);
+
+// Days from 1970-01-01 to a civil date (H. Hinnant's algorithm).
+inline long long days_from_civil(long long y, unsigned m, unsigned d) {
+    y -= m <= 2;
+    const long long era = (y >= 0 ? y : y - 399) / 400;
+    const unsigned yoe = static_cast<unsigned>(y - era * 400);
+    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + static_cast<long long>(doe) - 719468;
+}
+
 }  // namespace okdos

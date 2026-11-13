@@ -74,16 +74,36 @@ C library states `c-abi = false` for the row and calls openkal directly.
 
 | openkal | DOS |
 |---|---|
-| `stream` | handles 0, 1 and 2 (int 21h, 3Fh and 40h) through the transfer buffer; a handle's properties from IOCTL 4400h |
+| `stream` | DOS handles: 0, 1 and 2, and a file's (int 21h, 3Fh and 40h) through the transfer buffer; a handle's properties from IOCTL 4400h |
 | `memory` | DPMI blocks (0501h, 0502h), 4 KiB granular; the free memory from 0500h |
 | `env` | the arguments from the command tail (offset 80h of the segment prefix), the variables from the environment block, the program's name, the system name `dos` |
 | `time` | the BIOS tick count at 0040:006C (54.925494 ms, made monotonic across midnight); the wall clock from int 21h 2Ah and 2Ch, read as UTC; a sleep by int 15h, 86h |
+| `fs` | the current directory and each volume as supplied directories (`C:\WORK`, `C:`, `Z:`), a directory held as its name; open, create (5Bh refuses a name that exists), truncate, seek, transfers at an offset, find first and next for enquiry and listing, make and remove a directory, remove, rename, a file's time (5700h, 5701h) and a volume's capacity (36h) |
+| `terminal` | the console's mode by bit 5 of its device word (cooked: line assembly and echo; raw: every byte as typed), ANSI.SYS's sequences where it answers int 2Fh 1A00h, the size from the BIOS data area |
+| `exec` | a DPMI block, zeroed: the code descriptor spans 4 GiB, so every block is executable through it; publishing makes no request |
 | `abort` | int 21h, 4Ch with the status; an abort writes its message to standard error and ends with 134 |
 
 DOS is reached through DPMI's real-mode simulation (int 31h, 0300h), with every
-buffer in the transfer buffer. Files (`openkal.fs`) over int 21h are the next
-interface; processes as openkal states them, contexts and the network have no
-DOS counterpart (openkal clause 6.2).
+buffer in the transfer buffer.
+
+A volume is FAT's: names are eight characters, a dot and three, at most 64
+bytes with the volume, and no case is distinguished; a node has a modification
+time to two seconds and no identity; no link is made; DOS's rename refuses a
+name that exists, which is the rename that does not replace
+(`KAL_FS_PROP_RENAME_NO_REPLACE`), and the rename that replaces removes the name
+first and is not atomic. A name that holds DOS's `\` or a volume's `:` is
+refused, as a name that ascends is.
+
+Absent (openkal clause 6.2): contexts, processes as openkal states them, the
+network, and regions --- DOS cannot reserve an address apart from backing it: the
+DPMI host CWSDPMI is DPMI 0.90 and refuses 0504h (measured), which is the case
+`openkal/region.h` names for leaving the interface out. DOSBox Staging's console
+accepts the request for raw mode and stays cooked (measured);
+`kal_terminal_get_mode` reports what is in effect.
+
+`examples/files` writes, appends and reads a file, renames it into a directory,
+lists, resizes (the extension reads as zero) and removes them, and returns 9
+(measured under DOSBox Staging).
 
 ## The row's conventions
 

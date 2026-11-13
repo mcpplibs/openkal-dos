@@ -12,39 +12,43 @@
 
 #include "dos.h"
 
-namespace {
-
-using namespace okdos;
-
-constexpr kal_uintptr kStdin = 0, kStdout = 1, kStderr = 2;
+namespace okdos {
 
 // Writes through the transfer buffer, a piece at a time.
-kal_intptr write_handle(u16 handle, const u8* p, kal_uintptr n) {
-    kal_uintptr done = 0;
+long write_handle(u16 handle, const u8* p, unsigned long n) {
+    unsigned long done = 0;
     while (done < n) {
         u32 k = static_cast<u32>(n - done);
         if (k > transfer_size()) k = transfer_size();
         copy(transfer(), p + done, k);
         rm_regs r{};
         r.eax = 0x4000; r.ebx = handle; r.ecx = k; r.edx = 0;
-        if (!dos(r)) return done ? static_cast<kal_intptr>(done) : -kal_err_io;
+        if (!dos(r)) return done ? static_cast<long>(done) : -kal_err_io;
         const u32 wrote = r.eax & 0xffff;
         done += wrote;
         if (wrote < k) break;   // a full disk, or a device that takes no more
     }
-    return static_cast<kal_intptr>(done);
+    return static_cast<long>(done);
 }
 
-kal_intptr read_handle(u16 handle, u8* p, kal_uintptr n) {
+long read_handle(u16 handle, u8* p, unsigned long n) {
     u32 k = static_cast<u32>(n);
     if (k > transfer_size()) k = transfer_size();
     rm_regs r{};
     r.eax = 0x3f00; r.ebx = handle; r.ecx = k; r.edx = 0;
-    if (!dos(r)) return -kal_err_io;
+    if (!dos(r)) return (r.eax & 0xffff) == 5 ? -kal_err_permission : -kal_err_io;
     const u32 got = r.eax & 0xffff;
     copy(p, transfer(), got);
-    return static_cast<kal_intptr>(got);
+    return static_cast<long>(got);
 }
+
+}  // namespace okdos
+
+namespace {
+
+using namespace okdos;
+
+constexpr kal_uintptr kStdin = 0, kStdout = 1, kStderr = 2;
 
 // IOCTL 4400h: bit 7 of the device word is "a device, not a file"; bit 0 or 1 the console.
 bool is_console(u16 handle) {
@@ -76,19 +80,31 @@ kal_stream kal_stdin(void) { return kal_stream{kStdin}; }
 kal_stream kal_stdout(void) { return kal_stream{kStdout}; }
 kal_stream kal_stderr(void) { return kal_stream{kStderr}; }
 
+// A stream is a DOS handle: the three standard ones, or a file's (openkal.fs), which DOS numbers
+// from 5. A file opened for appending writes at its end each time (fs.cpp).
 kal_intptr kal_stream_write(kal_stream s, const void* buf, kal_uintptr n) {
-    if (s.h != kStdout && s.h != kStderr) return -kal_err_invalid;
+    if (s.h == kStdin || s.h == 3 || s.h == 4 || s.h >= 256) return -kal_err_invalid;
+    if (append_handle(static_cast<u16>(s.h))) {
+        rm_regs r{};
+        r.eax = 0x4202; r.ebx = static_cast<u32>(s.h); r.ecx = 0; r.edx = 0;
+        dos(r);
+    }
     return write_handle(static_cast<u16>(s.h), static_cast<const u8*>(buf), n);
 }
 
 kal_intptr kal_stream_read(kal_stream s, void* buf, kal_uintptr n) {
-    if (s.h != kStdin) return -kal_err_invalid;
-    return read_handle(0, static_cast<u8*>(buf), n);
+    if (s.h == kStdout || s.h == kStderr || s.h == 3 || s.h == 4 || s.h >= 256) return -kal_err_invalid;
+    return read_handle(static_cast<u16>(s.h), static_cast<u8*>(buf), n);
 }
 
-// DOS writes a handle's bytes when the call returns.
+// DOS writes a standard handle's bytes when the call returns; a file's are committed (68h).
 int kal_stream_flush(kal_stream s) {
-    return s.h <= kStderr ? kal_ok : kal_err_invalid;
+    if (s.h <= kStderr) return kal_ok;
+    if (s.h < 5 || s.h >= 256) return kal_err_invalid;
+    rm_regs r{};
+    r.eax = 0x6800; r.ebx = static_cast<u32>(s.h);
+    dos(r);
+    return kal_ok;
 }
 
 kal_uintptr kal_stream_props(kal_stream s) {

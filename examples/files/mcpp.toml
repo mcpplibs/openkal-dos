@@ -1,0 +1,13 @@
+# Files on DOS through openkal.fs (openkal-dos; technical experiment only): writes, appends and
+# reads a file, renames it into a directory, lists, resizes and removes them, and returns 9.
+#   mcpp run --target i686-dos-musl
+[package]
+name    = "files"
+version = "0.1.0"
+
+[targets.files]
+kind = "bin"
+main = "src/main.cpp"
+
+[target.i686-dos-musl]
+platform = "openkal-platform@0.28.0"

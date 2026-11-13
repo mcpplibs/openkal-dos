@@ -17,15 +17,6 @@ using namespace okdos;
 constexpr kal_u64 kTicksPerDay = 0x1800B0;
 constexpr kal_u64 kTickNs = 54925494;
 
-long long days_from_civil(long long y, unsigned m, unsigned d) {
-    y -= m <= 2;
-    const long long era = (y >= 0 ? y : y - 399) / 400;
-    const unsigned yoe = static_cast<unsigned>(y - era * 400);
-    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
-    const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    return era * 146097 + static_cast<long long>(doe) - 719468;
-}
-
 }  // namespace
 
 extern "C" {

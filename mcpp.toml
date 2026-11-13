@@ -15,10 +15,12 @@ provides    = ["mcpp:kernel-abi=openkal"]
 authors     = ["mcpplibs"]
 repo        = "https://github.com/mcpplibs/openkal-dos"
 
-# The interfaces DOS has a counterpart for. Files (openkal.fs) are the next; contexts, processes
-# as openkal states them and the network are absent (openkal clause 6.2).
+# The interfaces DOS has a counterpart for. Absent (openkal clause 6.2): contexts, processes as
+# openkal states them, the network, and regions --- the DPMI host reserves no address apart from
+# backing it (CWSDPMI is DPMI 0.90 and refuses 0504h, measured).
 [kernel-abi]
-provides-interfaces = ["openkal.abort", "openkal.env", "openkal.memory", "openkal.stream", "openkal.time"]
+provides-interfaces = ["openkal.abort", "openkal.env", "openkal.exec", "openkal.fs", "openkal.memory",
+                       "openkal.stream", "openkal.terminal", "openkal.time"]
 
 [dependencies]
 openkal = "^0.25.0"

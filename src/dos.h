@@ -62,6 +62,9 @@ long write_handle(u16 handle, const u8* p, unsigned long n);
 long read_handle(u16 handle, u8* p, unsigned long n);
 // Whether a file's handle was opened for appending (fs.cpp): each write is placed at the end.
 bool append_handle(u16 handle);
+// The handlers of the processor's faults (fault.S, fault.cpp): a fault is reported on standard
+// error and ends the program with 128 and the signal's number.
+void install_faults();
 
 // Days from 1970-01-01 to a civil date (H. Hinnant's algorithm).
 inline long long days_from_civil(long long y, unsigned m, unsigned d) {

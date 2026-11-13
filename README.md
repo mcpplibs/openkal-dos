@@ -82,6 +82,7 @@ C library states `c-abi = false` for the row and calls openkal directly.
 | `terminal` | the console's mode by bit 5 of its device word (cooked: line assembly and echo; raw: every byte as typed), ANSI.SYS's sequences where it answers int 2Fh 1A00h, the size from the BIOS data area |
 | `exec` | a DPMI block, zeroed: the code descriptor spans 4 GiB, so every block is executable through it; publishing makes no request |
 | `abort` | int 21h, 4Ch with the status; an abort writes its message to standard error and ends with 134 |
+| (faults) | a processor fault (division by zero, an instruction the processor lacks, the stack, general protection, a page) is reported on standard error with the instruction's address, and the program ends with 128 and the corresponding signal's number (136, 132, 139), through DPMI's exception handlers (int 31h, 0203h); CWSDPMI's own report is a register dump on the screen and status 1 (measured) |
 
 DOS is reached through DPMI's real-mode simulation (int 31h, 0300h), with every
 buffer in the transfer buffer.
@@ -101,18 +102,29 @@ DPMI host CWSDPMI is DPMI 0.90 and refuses 0504h (measured), which is the case
 accepts the request for raw mode and stays cooked (measured);
 `kal_terminal_get_mode` reports what is in effect.
 
+An i386 ok image (`i686-openkal`) runs on DOS as on firmware: the platform's
+runner `hosts` include `dos-i686`, so `mcpp pack --pkg-format single-file
+--systems dos-i686` builds openkal-run's core runner as a program of this row,
+with the image in its `.oke` section, and the runner places the image through
+`exec`. Measured under DOSBox Staging: an image built for `i686-openkal`
+(C++23, `import std`, an exception across a frame) sorted its arguments, read
+`PATH` and returned 7.
+
 `examples/files` writes, appends and reads a file, renames it into a directory,
 lists, resizes (the extension reads as zero) and removes them, and returns 9
 (measured under DOSBox Staging).
 
 ## The row's conventions
 
-The row compiles for `i386-unknown-none-elf` at `-march=i586` (the processor
-the emulators that run DOS programs model), with emulated thread-local storage
+The row compiles for `i386-unknown-none-elf` at `-march=i486`: DOSBox Staging
+0.83 executes RDTSC and not CMPXCHG8B, under every `cputype` (measured), so a
+sixty-four bit atomic is compiler-rt's call (`atomic.c`) rather than the
+Pentium's instruction. The row also uses emulated thread-local storage
 (there is no thread register the toolchain can address: openkal-llvm-runtime
 builds compiler-rt's `emutls.c` for the row) and unwind tables for every unit,
 C included (clang's default for a triple with no system is none, and the
-unwinder's own frames need them). The link is `ld.lld -static
+unwinder's own frames need them), and a stack aligned to sixteen bytes at a
+call, as an i386 ok image's is. The link is `ld.lld -static
 --image-base=0x1000 -z norelro --gc-sections --eh-frame-hdr`, entered at
 `okdos_entry`.
 

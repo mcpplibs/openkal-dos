@@ -60,6 +60,7 @@ extern "C" [[noreturn]] void okdos_start(const handoff* h) {
         kal_exit(127);
     }
     self().h = h;
+    install_faults();
     record_arguments(h);
 #ifdef OKDOS_STANDALONE
     __libc_start_main(main, 0, nullptr, nullptr, nullptr, nullptr);

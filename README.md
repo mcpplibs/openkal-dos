@@ -118,8 +118,8 @@ lists, resizes (the extension reads as zero) and removes them, and returns 9
 
 The row compiles for `i386-unknown-none-elf` at `-march=i486`: DOSBox Staging
 0.83 executes RDTSC and not CMPXCHG8B, under every `cputype` (measured), so a
-sixty-four bit atomic is compiler-rt's call (`atomic.c`) rather than the
-Pentium's instruction. The row also uses emulated thread-local storage
+sixty-four bit atomic is compiler-rt's call (`atomic.c`) rather than that
+instruction. The row also uses emulated thread-local storage
 (there is no thread register the toolchain can address: openkal-llvm-runtime
 builds compiler-rt's `emutls.c` for the row) and unwind tables for every unit,
 C included (clang's default for a triple with no system is none, and the

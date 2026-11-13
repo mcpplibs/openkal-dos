@@ -1,0 +1,15 @@
+# okdos: the seal of a DOS program --- the stub of openkal-dos written before an ELF32 i386
+# executable. A tool of the building machine, which a platform names in `[platform.tools]` and
+# runs as its link's seal. Technical experiment only (README).
+[package]
+namespace   = "mcpplibs"
+name        = "openkal-dos-tools"
+version     = "0.1.0"
+description = "okdos: seals an ELF32 i386 executable as a DOS program behind openkal-dos's DPMI stub (technical experiment only)"
+license     = "Apache-2.0"
+authors     = ["mcpplibs"]
+repo        = "https://github.com/mcpplibs/openkal-dos"
+
+[targets.okdos]
+kind = "bin"
+main = "src/okdos.cpp"

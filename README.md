@@ -128,6 +128,15 @@ call, as an i386 ok image's is. The link is `ld.lld -static
 --image-base=0x1000 -z norelro --gc-sections --eh-frame-hdr`, entered at
 `okdos_entry`.
 
+## Checks
+
+CI (`.github/workflows/ci.yml`) asserts that `stub/stub.S` assembles to the
+committed `tools/src/stub_bytes.h`; that `okdos` builds on Linux, macOS and
+Windows and refuses a file that is no ELF32 i386 executable; and that the
+examples and `tests/fault`, built for `i686-dos-musl` with this repository's
+openkal-dos and run under DOSBox Staging, unoptimised and optimised, print what
+they state and end with 7, 9 and 139.
+
 ## CWSDPMI
 
 CWSDPMI is Copyright (C) Charles W. Sandmann. It is not part of this package

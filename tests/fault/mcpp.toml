@@ -1,0 +1,12 @@
+# A program that writes where no memory is: openkal-dos reports the page fault on standard error and
+# the program ends with 139 (128 and SIGSEGV's number), where CWSDPMI alone ends it with 1.
+[package]
+name    = "fault"
+version = "0.1.0"
+
+[targets.fault]
+kind = "bin"
+main = "src/main.cpp"
+
+[target.i686-dos-musl]
+platform = "openkal-platform@0.28.0"

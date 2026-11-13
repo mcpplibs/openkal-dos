@@ -1,0 +1,133 @@
+name: CI
+
+# What this workflow asserts about openkal-dos (technical experiment only).
+#
+#   stub      stub/stub.S assembles to the bytes the seal writes (tools/src/stub_bytes.h is what
+#             stub/build.sh generates from it, byte for byte).
+#   okdos     the seal builds on each system of a building machine and refuses a file that is no
+#             ELF32 i386 executable.
+#   programs  the examples and tests, built for i686-dos-musl through openkal-platform with this
+#             repository's openkal-dos, run under DOSBox Staging with CWSDPMI beside them (dirun),
+#             unoptimised and optimised: hello's arguments, exception, environment and status 7;
+#             files' FAT operations and status 9; a page fault's status 139.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  XLINGS_VERSION: v2026.10.26.1
+  XLINGS_NON_INTERACTIVE: '1'
+  MCPP_VERSION: 2026.11.13.1
+  LLVM: llvm@23.1.3
+
+jobs:
+  stub:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xlings and mcpp
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/openxlings/xlings/main/tools/other/quick_install.sh | bash -s "$XLINGS_VERSION"
+          echo "$HOME/.xlings/subos/current/bin" >> "$GITHUB_PATH"
+      - name: mcpp and LLVM
+        run: |
+          xlings update
+          xlings install "mcpp@$MCPP_VERSION" -y -g
+          mcpp self config --mirror GLOBAL
+          mcpp toolchain install llvm 23.1.3
+      - name: The stub's bytes are the committed ones
+        run: |
+          LLVM="$HOME/.mcpp/registry/data/xpkgs/xim-x-llvm/23.1.3/bin" sh stub/build.sh
+          git diff --exit-code tools/src/stub_bytes.h
+
+  okdos:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xlings (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/openxlings/xlings/main/tools/other/quick_install.sh | bash -s "$XLINGS_VERSION"
+          echo "$HOME/.xlings/subos/current/bin" >> "$GITHUB_PATH"
+      - name: Install xlings (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm https://d2learn.org/xlings-install.ps1.txt | iex
+          "$env:USERPROFILE\.xlings\subos\current\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: mcpp
+        run: |
+          xlings update
+          xlings install "mcpp@$MCPP_VERSION" -y -g
+          mcpp self config --mirror GLOBAL
+      - name: okdos builds and refuses what is no executable of the row
+        run: |
+          (cd tools && mcpp build)
+          okdos=$(find tools/target -path '*bin*' \( -name okdos -o -name okdos.exe \) -type f | head -1)
+          test -n "$okdos"
+          printf 'not an executable' > plain.bin
+          if "$okdos" seal plain.bin; then echo "::error::okdos sealed a file that is no ELF32 executable"; exit 1; fi
+          if "$okdos" check plain.bin; then echo "::error::okdos check accepted a plain file"; exit 1; fi
+
+  programs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xlings and mcpp
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/openxlings/xlings/main/tools/other/quick_install.sh | bash -s "$XLINGS_VERSION"
+          echo "$HOME/.xlings/subos/current/bin" >> "$GITHUB_PATH"
+      - name: mcpp and LLVM
+        run: |
+          xlings update
+          xlings install "mcpp@$MCPP_VERSION" -y -g
+          mcpp self config --mirror GLOBAL
+          mcpp toolchain install llvm 23.1.3
+      # Each program is built with this repository's openkal-dos in place of the indexed one.
+      - name: This repository's openkal-dos
+        run: |
+          for p in examples/hello examples/files tests/fault; do
+            printf '\n[target.i686-dos-musl.dependencies]\nmcpplibs.openkal-dos = { path = "%s", override = true }\n' \
+              "$GITHUB_WORKSPACE" >> "$p/mcpp.toml"
+          done
+      - name: hello (status 7), unoptimised and optimised
+        working-directory: examples/hello
+        run: |
+          for profile in "" --release; do
+            set +e; mcpp run --target i686-dos-musl $profile -- zeta alpha > out.txt; rc=$?; set -e
+            cat out.txt
+            [ "$rc" = 7 ] || { echo "::error::hello ($profile) ended with $rc, not 7"; exit 1; }
+            tr -d '\r' < out.txt | grep -qx '  alpha'
+            tr -d '\r' < out.txt | grep -qx 'caught: an exception crossed a frame'
+            tr -d '\r' < out.txt | grep -q '^PATH=.'
+          done
+      - name: files (status 9)
+        working-directory: examples/files
+        run: |
+          set +e; mcpp run --target i686-dos-musl > out.txt; rc=$?; set -e
+          cat out.txt
+          [ "$rc" = 9 ] || { echo "::error::files ended with $rc, not 9"; exit 1; }
+          tr -d '\r' < out.txt | grep -qx 'read 3: appended'
+          tr -d '\r' < out.txt | grep -qx 'resized to 40'
+          tr -d '\r' < out.txt | grep -qx 'removed: true'
+      - name: a page fault (status 139)
+        working-directory: tests/fault
+        run: |
+          set +e; mcpp run --target i686-dos-musl > out.txt; rc=$?; set -e
+          cat out.txt
+          [ "$rc" = 139 ] || { echo "::error::the faulting program ended with $rc, not 139"; exit 1; }
+          tr -d '\r' < out.txt | grep -qx 'before the fault'
+          ! tr -d '\r' < out.txt | grep -q 'after the fault'

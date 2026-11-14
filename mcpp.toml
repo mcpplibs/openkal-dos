@@ -1,0 +1,39 @@
+# openkal on DOS, through DPMI. TECHNICAL EXPERIMENT ONLY (README): no stability, no support.
+#
+# A DOS program of this arrangement is a stub (stub/stub.S, an MZ program) followed by an ELF32
+# i386 executable: the stub enters 32-bit protected mode through a DPMI host --- CWSDPMI where
+# the machine has none --- and loads the executable into one block of memory; this package
+# receives it there (src/start.S) and answers openkal's interfaces through DOS (int 21h), which
+# DPMI's real-mode simulation (int 31h, 0300h) reaches with buffers in conventional memory.
+[package]
+namespace   = "mcpplibs"
+name        = "openkal-dos"
+version     = "0.1.0"
+description = "An implementation of openkal on DOS through DPMI (technical experiment only)"
+license     = "Apache-2.0"
+provides    = ["mcpp:kernel-abi=openkal"]
+authors     = ["mcpplibs"]
+repo        = "https://github.com/mcpplibs/openkal-dos"
+
+# The interfaces DOS has a counterpart for. Absent (openkal clause 6.2): contexts, processes as
+# openkal states them, the network, and regions --- the DPMI host reserves no address apart from
+# backing it (CWSDPMI is DPMI 0.90 and refuses 0504h, measured).
+[kernel-abi]
+provides-interfaces = ["openkal.abort", "openkal.env", "openkal.exec", "openkal.fs", "openkal.memory",
+                       "openkal.stream", "openkal.terminal", "openkal.time"]
+
+[dependencies]
+openkal = "^0.25.0"
+
+# With no C library this package runs the initialisers and calls `main'; `standalone' is the
+# arrangement beneath a C library written above openkal (openkal-musl names it so on
+# `cfg(os = "dos")'), whose `__libc_start_main' receives the program.
+[features]
+standalone = { defines = ["OKDOS_STANDALONE"] }
+
+[build]
+sources = ["src/*.cpp", "src/*.S"]
+flags = [
+  { glob = "src/**", cxxflags = ["-fno-exceptions", "-fno-rtti", "-fno-stack-protector",
+                                 "-fno-asynchronous-unwind-tables"] },
+]

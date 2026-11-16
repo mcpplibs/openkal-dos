@@ -62,6 +62,7 @@ bool is_console(u16 handle) {
 extern "C" {
 
 KAL_NORETURN void kal_exit(int code) {
+    check_stack();
     __asm__ volatile("int $0x21" ::"a"(0x4c00 | (code & 0xff)));
     for (;;) {}
 }

@@ -8,7 +8,7 @@
 [package]
 namespace   = "mcpplibs"
 name        = "openkal-dos"
-version     = "0.1.0"
+version     = "0.1.1"
 description = "An implementation of openkal on DOS through DPMI (technical experiment only)"
 license     = "Apache-2.0"
 provides    = ["mcpp:kernel-abi=openkal"]

@@ -1,0 +1,16 @@
+# The same recursion with a stack of 64 KiB, stated at the link (PT_GNU_STACK): the guard page
+# below the stack turns the overflow into a page fault, reported with status 139.
+[package]
+name    = "stack-small"
+version = "0.1.0"
+
+[targets.stack-small]
+kind = "bin"
+main = "src/main.cpp"
+
+# The row links with ld.lld itself, so the flag is the linker's, not the compiler driver's.
+[build]
+ldflags = ["-z stack-size=65536"]
+
+[target.i686-dos-musl]
+platform = "openkal-platform@0.28.0"

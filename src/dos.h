@@ -1,9 +1,12 @@
 // What the stub hands over, and the two ways this implementation reaches DOS.
 //
-// THE HAND-OVER (stub/stub.S writes it, version 1). The program is entered in 32-bit protected
+// THE HAND-OVER (stub/stub.S writes it, version 2). The program is entered in 32-bit protected
 // mode with CS, DS, ES and SS descriptors whose base is the block the stub allocated and whose
 // limit spans 4 GiB, so an address of the program is an offset from the block's base and any
 // linear address L is reached at L - base. EBX holds the record's offset.
+//
+// THE BLOCK is [loadable segments][the record's page][the guard page][the stack]; the stack's top
+// is the block's end.
 #pragma once
 
 namespace okdos {
@@ -12,7 +15,7 @@ using u8 = unsigned char; using u16 = unsigned short; using u32 = unsigned int;
 
 struct handoff {
     u32  magic;            // "OKDS"
-    u32  version;          // 1
+    u32  version;          // 2
     u32  base;             // the block's linear address
     u32  size;             // its size
     u32  block;            // its DPMI handle
@@ -24,8 +27,13 @@ struct handoff {
     u16  code_selector, data_selector, tb_selector;
     u16  exe_handle;       // the program's own file, opened by the stub
     char name[128];        // the program's name as DOS gave it
+    // Version 2 (0.1.1). A record of version 1 (the 0.1.0 stub) ends here; its program has the
+    // stack of 64 KiB above the record and no guard page.
+    u32  guard;            // the guard page's offset in the block
+    u32  stack_size;       // the stack's size: PT_GNU_STACK's, or the stub's default (1 MiB)
 };
-static_assert(sizeof(handoff) == 168);
+static_assert(sizeof(handoff) == 176);
+constexpr u32 kVersion = 2;
 constexpr u32 kMagic = 0x53444b4fu;
 
 // DPMI's real-mode call structure (int 31h, 0300h).
@@ -65,6 +73,10 @@ bool append_handle(u16 handle);
 // The handlers of the processor's faults (fault.S, fault.cpp): a fault is reported on standard
 // error and ends the program with 128 and the signal's number.
 void install_faults();
+// The guard page below the stack (stack.cpp): uncommitted through DPMI 1.0 (int 31h, 0507h), so an
+// overflow is a page fault; where the host refuses, a canary checked at the program's end.
+void guard_stack();
+void check_stack();
 
 // Days from 1970-01-01 to a civil date (H. Hinnant's algorithm).
 inline long long days_from_civil(long long y, unsigned m, unsigned d) {

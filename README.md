@@ -33,13 +33,13 @@ A DOS program of this arrangement is two parts in one file:
 
 | part | what it is |
 |---|---|
-| the stub (`stub/stub.S`, 2544 bytes) | an MZ program in 16-bit code |
+| the stub (`stub/stub.S`, 2656 bytes) | an MZ program in 16-bit code |
 | the executable | ELF32, i386, linked at its address (`ET_EXEC`, base 0x1000), at most 16 program headers |
 
 The stub finds a 32-bit DPMI host (int 2Fh, 1687h), and where there is none it
 runs `CWSDPMI.EXE` from the program's own directory and asks again. It enters
 protected mode as a 32-bit client, allocates one block for the executable's
-loadable segments, its first stack (64 KiB) and the hand-over record, makes a
+loadable segments, the hand-over record, a guard page and the stack, makes a
 code and a data descriptor whose base is the block and whose limit is 4 GiB,
 reads each loadable segment from its own file through a 16 KiB transfer buffer
 in conventional memory, and enters the executable at `e_entry` with EBX naming
@@ -51,14 +51,40 @@ stub before an executable, in place; `okdos check <file>` reports whether a file
 is such a program. The stub applies no relocation, which is why the executable
 is linked at its address.
 
+## The stack
+
+The block is `[loadable segments][the record's page][the guard page][the
+stack]`, and the stack's top is the block's end. The stack's size is a property
+of the executable, fixed at its link: the program header `PT_GNU_STACK`'s
+`p_memsz` (lld's `-z stack-size=N`), rounded up to a page. Where the header is
+absent or states zero, the stub's default applies, 1 MiB. A program states
+another size with its own link flags; the row links with `ld.lld` itself, so
+the flag is the linker's:
+
+```toml
+[build]
+ldflags = ["-z stack-size=4194304"]
+```
+
+The runtime makes the guard page uncommitted through DPMI 1.0's 0507h (set page
+attributes), so a stack that grows past its size is a page fault, reported as
+every fault is (status 139). CWSDPMI r7 under DOSBox Staging grants 0507h
+(measured: the record's page below the guard page reads, the guard page
+faults). A host that refuses it leaves the page committed: the runtime fills it
+with a canary, says on standard error at the start that the guard is absent, and
+checks the canary at the program's end, where an overwritten canary ends the
+program with a sentence and status 139.
+
 ## The hand-over
 
-The record (`src/dos.h`, version 1, 168 bytes) states the block's linear base,
+The record (`src/dos.h`, version 2, 176 bytes) states the block's linear base,
 its size and DPMI handle, the segment prefix's selector and segment, the
 environment's segment, the transfer buffer's segment, size and selector, the
-code and data selectors, the program's file (left open), and the name DOS
-started the program by. `okdos_entry` (`src/start.S`) aligns the stack and calls
-`okdos_start`, which refuses a record of another version with status 127.
+code and data selectors, the program's file (left open), the name DOS started
+the program by, the guard page's offset and the stack's size. `okdos_entry`
+(`src/start.S`) aligns the stack and calls `okdos_start`, which accepts versions
+1 and 2 and refuses any other with status 127. A record of version 1 (the 0.1.0
+stub) has no guard page, and its program keeps the 64 KiB stack of that stub.
 
 ## Two arrangements
 
@@ -133,9 +159,12 @@ call, as an i386 ok image's is. The link is `ld.lld -static
 CI (`.github/workflows/ci.yml`) asserts that `stub/stub.S` assembles to the
 committed `tools/src/stub_bytes.h`; that `okdos` builds on Linux, macOS and
 Windows and refuses a file that is no ELF32 i386 executable; and that the
-examples and `tests/fault`, built for `i686-dos-musl` with this repository's
-openkal-dos and run under DOSBox Staging, unoptimised and optimised, print what
-they state and end with 7, 9 and 139.
+examples and the tests, built for `i686-dos-musl` with this repository's
+openkal-dos and seal and run under DOSBox Staging, print what they state and end
+with their statuses: `examples/hello` 7 (unoptimised and optimised),
+`examples/files` 9, `tests/fault` 139, `tests/stack` 0 (sixty-four frames of
+8 KiB within the default stack) and `tests/stack-small` 139 (the same recursion
+with a stack of 64 KiB, stopped by the guard page).
 
 ## CWSDPMI
 

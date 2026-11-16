@@ -1,0 +1,12 @@
+# Sixty-four frames of 8 KiB (openkal-dos#3) within the default stack of 1 MiB: the program prints
+# the sum and ends with 0.
+[package]
+name    = "stack"
+version = "0.1.0"
+
+[targets.stack]
+kind = "bin"
+main = "src/main.cpp"
+
+[target.i686-dos-musl]
+platform = "openkal-platform@0.28.0"

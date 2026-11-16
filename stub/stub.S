@@ -9,11 +9,16 @@
 // at the end of its environment and opens it; reads the executable's ELF header and program
 // headers; asks for a DPMI host (int 2Fh, 1687h), and where there is none runs CWSDPMI.EXE from
 // the program's directory and asks again; enters protected mode as a 32-bit client; allocates
-// one block of memory for the executable's segments, its first stack and the hand-over record;
+// one block of memory for the executable's segments, the hand-over record, a guard page and the
+// stack, in this order;
 // makes a code and a data descriptor whose base is the block and whose limit spans 4 GiB; reads
 // each loadable segment into the block through a transfer buffer in conventional memory (int 21h
 // simulated by DPMI 0300h), zeroes what the file does not hold, and enters the executable at its
 // ELF entry with EBX the hand-over record's offset (src/dos.h, okdos::handoff).
+//
+// THE STACK'S SIZE is the executable's PT_GNU_STACK p_memsz (lld's `-z stack-size=N'), rounded up
+// to a page; where the program header is absent or states zero, DEFAULT_STACK. The runtime makes
+// the guard page uncommitted (src/stack.cpp); the stub only reserves it.
 //
 // Built by stub/build.sh into tools/src/stub_bytes.h, which the seal (tools/) writes before the
 // executable. Apache-2.0, as the rest of openkal-dos; nothing of DJGPP's stub is used.
@@ -41,7 +46,8 @@ _okdos_stub:
     .set STACK, 0x800
     .set PHMAX, 16
     .set TB_PARAS, 0x400            // the transfer buffer: 16 KiB
-    .set FIRST_STACK, 0x10000       // the executable's first stack: 64 KiB
+    .set DEFAULT_STACK, 0x100000    // the stack where the executable states none: 1 MiB
+    .set PT_GNU_STACK, 0x6474e551
 
 start:
     movw %es, %ax
@@ -125,12 +131,22 @@ start:
     call read
     jc fail_read
 
-    // The span: the highest end of a loadable segment.
+    // The span: the highest end of a loadable segment. The stack: PT_GNU_STACK's size.
+    movl $DEFAULT_STACK, stack_size
     xorl %eax, %eax
     movw phnum, %cx
     movw $phdrs, %si
 6:  jcxz 7f
-    cmpl $1, (%si)                  // PT_LOAD
+    cmpl $PT_GNU_STACK, (%si)
+    jne 14f
+    movl 20(%si), %edx              // p_memsz; zero states nothing
+    testl %edx, %edx
+    jz 8f
+    addl $0xfff, %edx
+    andl $0xfffff000, %edx
+    movl %edx, stack_size
+    jmp 8f
+14: cmpl $1, (%si)                  // PT_LOAD
     jne 8f
     movl 8(%si), %edx               // p_vaddr
     addl 20(%si), %edx              // p_memsz
@@ -143,7 +159,9 @@ start:
 7:  addl $0xfff, %eax
     andl $0xfffff000, %eax
     movl %eax, span
-    addl $(FIRST_STACK + 0x1000), %eax
+    addl $0x2000, %eax              // the record's page and the guard page
+    addl stack_size, %eax
+    jc fail_format
     movl %eax, block_size
 
     // A DPMI host, or CWSDPMI from the program's directory.
@@ -239,7 +257,7 @@ have_dpmi:
     movw data_sel, %es
     movl span, %edi
     movl $0x53444b4f, %es:(%edi)    // "OKDS"
-    movl $1, %es:4(%edi)            // version
+    movl $2, %es:4(%edi)            // version
     movl base, %eax
     movl %eax, %es:8(%edi)
     movl block_size, %eax
@@ -263,6 +281,11 @@ have_dpmi:
     movw %ax, %es:36(%edi)
     movw handle, %ax                // the program's file, left open: closing it here hangs
     movw %ax, %es:38(%edi)          // under DOSBox Staging, and DOS closes it at the end
+    movl span, %eax                 // the guard page, after the record's page
+    addl $0x1000, %eax
+    movl %eax, %es:168(%edi)
+    movl stack_size, %eax
+    movl %eax, %es:172(%edi)
     // The name the program was started by, as DOS gave it.
     leal 40(%edi), %edi
     movw $path, %si
@@ -273,7 +296,7 @@ have_dpmi:
     testb %al, %al
     jnz 13b
 
-    // Enter: DS, ES and SS the data descriptor, the first stack at the block's end.
+    // Enter: DS, ES and SS the data descriptor, the stack's top at the block's end.
     movl span, %ebx
     movl ehdr + 24, %edx            // e_entry
     movw code_sel, %cx
@@ -518,7 +541,7 @@ fail_pm:
 m_memory:  .asciz "okdos: not enough memory\r\n"
 m_open:    .asciz "okdos: the program cannot open itself\r\n"
 m_read:    .asciz "okdos: the program's executable cannot be read\r\n"
-m_format:  .asciz "okdos: the appended executable is not ELF32 i386 with at most 16 program headers\r\n"
+m_format:  .asciz "okdos: the appended executable is not ELF32 i386 with at most 16 program headers and a block below 4 GiB\r\n"
 m_dpmi:    .asciz "okdos: no 32-bit DPMI host, and none from CWSDPMI.EXE beside the program\r\n"
 m_switch:  .asciz "okdos: the DPMI host refused protected mode\r\n"
 m_block:   .asciz "okdos: the DPMI host has no block of the executable's size\r\n"
@@ -545,6 +568,7 @@ tb_sel:       .word 0
     .balign 4
 span:         .long 0
 block_size:   .long 0
+stack_size:   .long 0
 base:         .long 0
 block_handle: .long 0
 exec_block:   .word 0

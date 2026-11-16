@@ -55,12 +55,13 @@ void record_arguments(const handoff* h) {
 }  // namespace
 
 extern "C" [[noreturn]] void okdos_start(const handoff* h) {
-    if (h->magic != kMagic || h->version != 1) {
+    if (h->magic != kMagic || h->version < 1 || h->version > kVersion) {
         // A stub of another version: nothing here can be trusted to say so but the status.
         kal_exit(127);
     }
     self().h = h;
     install_faults();
+    guard_stack();
     record_arguments(h);
 #ifdef OKDOS_STANDALONE
     __libc_start_main(main, 0, nullptr, nullptr, nullptr, nullptr);

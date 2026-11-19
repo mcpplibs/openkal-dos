@@ -4,7 +4,7 @@
 [package]
 namespace   = "mcpplibs"
 name        = "openkal-dos-tools"
-version     = "0.1.1"
+version     = "0.2.0"
 description = "okdos: seals an ELF32 i386 executable as a DOS program behind openkal-dos's DPMI stub (technical experiment only)"
 license     = "Apache-2.0"
 authors     = ["mcpplibs"]

@@ -128,6 +128,16 @@ DPMI host CWSDPMI is DPMI 0.90 and refuses 0504h (measured), which is the case
 accepts the request for raw mode and stays cooked (measured);
 `kal_terminal_get_mode` reports what is in effect.
 
+0.2.0 is written against openkal 0.26, and nothing but the specification's
+version changes; `openkal-dos-tools` carries the same version, as the two are one
+archive. What 0.26 requires is of `openkal.process`, which is absent here: a
+start bounded by the environment alone (clause 7.6) and a unit claimed only
+where a reference can be made (clause 7.18). What a program receives is bounded
+by DOS alone already: the command tail of the segment prefix holds at most 127
+bytes, the room `src/start.cpp` keeps for its words is that bound's, and the
+variables are read from the environment block where it lies, however many it
+holds.
+
 An i386 ok image (`i686-openkal`) runs on DOS as on firmware: the platform's
 runner `hosts` include `dos-i686`, so `mcpp pack --pkg-format single-file
 --systems dos-i686` builds openkal-run's core runner as a program of this row,

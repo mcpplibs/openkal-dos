@@ -8,7 +8,7 @@
 [package]
 namespace   = "mcpplibs"
 name        = "openkal-dos"
-version     = "0.1.1"
+version     = "0.2.0"
 description = "An implementation of openkal on DOS through DPMI (technical experiment only)"
 license     = "Apache-2.0"
 provides    = ["mcpp:kernel-abi=openkal"]
@@ -23,7 +23,7 @@ provides-interfaces = ["openkal.abort", "openkal.env", "openkal.exec", "openkal.
                        "openkal.stream", "openkal.terminal", "openkal.time"]
 
 [dependencies]
-openkal = "^0.25.0"
+openkal = "^0.26.0"
 
 # With no C library this package runs the initialisers and calls `main'; `standalone' is the
 # arrangement beneath a C library written above openkal (openkal-musl names it so on

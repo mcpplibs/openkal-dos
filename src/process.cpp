@@ -85,6 +85,33 @@ bool needs_quotes(const char* a, kal_uintptr n) {
     return false;
 }
 
+template <class Put>
+bool put_plain(const char* a, kal_uintptr len, Put& put) {
+    for (kal_uintptr k = 0; k < len; ++k) if (!put(a[k])) return false;
+    return true;
+}
+
+template <class Put>
+bool put_backslashes(kal_uintptr count, Put& put) {
+    for (kal_uintptr s = 0; s < count; ++s) if (!put('\\')) return false;
+    return true;
+}
+
+// An element in quotes: a quote preceded by a backslash, and the backslashes before a quote, or
+// before the closing one, doubled.
+template <class Put>
+bool put_quoted(const char* a, kal_uintptr len, Put& put) {
+    if (!put('"')) return false;
+    kal_uintptr slashes = 0;
+    for (kal_uintptr k = 0; k < len; ++k) {
+        if (a[k] == '\\') { ++slashes; if (!put('\\')) return false; continue; }
+        if (a[k] == '"' && !put_backslashes(slashes + 1, put)) return false;
+        slashes = 0;
+        if (!put(a[k])) return false;
+    }
+    return put_backslashes(slashes, put) && put('"');
+}
+
 // The tail after the first element: a blank, then each element, quoted where it must be ---
 // a quote preceded by a backslash, and the backslashes before a quote doubled (start.cpp's
 // division). A byte DOS ends a tail at, a carriage return or a NUL, cannot be carried.
@@ -103,20 +130,7 @@ int command_tail(const char** argv, const kal_uintptr* lens, kal_uintptr argc, b
             if (a[k] == '\r' || a[k] == '\0') return kal_err_invalid;
         if (!put(' ')) return kal_err_no_space;
         const bool quote = !one_string && needs_quotes(a, len);
-        if (quote && !put('"')) return kal_err_no_space;
-        kal_uintptr slashes = 0;
-        for (kal_uintptr k = 0; k < len; ++k) {
-            if (a[k] == '\\') { ++slashes; if (!put('\\')) return kal_err_no_space; continue; }
-            if (quote && a[k] == '"') {
-                for (kal_uintptr s = 0; s <= slashes; ++s) if (!put('\\')) return kal_err_no_space;
-            }
-            slashes = 0;
-            if (!put(a[k])) return kal_err_no_space;
-        }
-        if (quote) {
-            for (kal_uintptr s = 0; s < slashes; ++s) if (!put('\\')) return kal_err_no_space;
-            if (!put('"')) return kal_err_no_space;
-        }
+        if (!(quote ? put_quoted(a, len, put) : put_plain(a, len, put))) return kal_err_no_space;
     }
     return kal_ok;
 }

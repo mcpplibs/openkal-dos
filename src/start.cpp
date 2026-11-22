@@ -54,6 +54,16 @@ const char* first_element(const handoff* h) {
     return h->name;
 }
 
+// A run of backslashes at `i', written at `o': halved before a quote, with the quote written as a
+// character after an odd run; itself otherwise.
+void backslashes(u32 n, u32& i, u32& o) {
+    u32 k = 0;
+    while (i < n && tail[i] == '\\') { ++k; ++i; }
+    const bool quote = i < n && tail[i] == '"';
+    for (u32 b = 0; b < (quote ? k / 2 : k); ++b) tail[o++] = '\\';
+    if (quote && (k & 1)) { tail[o++] = '"'; ++i; }
+}
+
 // THE TAIL IS DIVIDED AS DOS'S C COMPILERS DIVIDE IT (0.3.0): blanks separate; a double quote
 // begins or ends a part in which they do not; backslashes before a quote are halved, and an odd
 // one makes the quote a character; other backslashes are themselves. 0.2.0 divided at blanks
@@ -77,14 +87,7 @@ void record_arguments(const handoff* h) {
         char* word = &tail[o];
         bool quoted = false;
         while (i < n && (quoted || !blank(tail[i]))) {
-            if (tail[i] == '\\') {
-                u32 k = 0;
-                while (i < n && tail[i] == '\\') { ++k; ++i; }
-                const bool quote = i < n && tail[i] == '"';
-                for (u32 b = 0; b < (quote ? k / 2 : k); ++b) tail[o++] = '\\';
-                if (quote && (k & 1)) { tail[o++] = '"'; ++i; }
-                continue;
-            }
+            if (tail[i] == '\\') { backslashes(n, i, o); continue; }
             if (tail[i] == '"') { quoted = !quoted; ++i; continue; }
             tail[o++] = tail[i++];
         }

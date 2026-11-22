@@ -9,14 +9,15 @@ interfaces, its hand-over and its stub may change in any release.
 
 A program names the target and nothing else. The row `i686-dos-musl`, its
 compile and link conventions, its seal and its runner are the openkal
-platform's ([openkal-platform][plat] 0.28.0): the same C library and C++
+platform's ([openkal-platform][plat], from 0.28.0; 0.32.0 holds this release): the same C library and C++
 run-time as on every other system, openkal-musl and openkal-llvm-runtime, with
 this implementation beneath them, so a DOS program is written in C++23 with
 `import std`:
 
 ```toml
 [target.i686-dos-musl]
-platform = "openkal-platform@0.28.0"
+platform = "openkal-platform@0.32.0"
+runner   = { enabled = true }   # the platform states the machine runner off until a project enables it
 ```
 
 ```sh
@@ -102,7 +103,8 @@ C library states `c-abi = false` for the row and calls openkal directly.
 |---|---|
 | `stream` | DOS handles: 0, 1 and 2, and a file's (int 21h, 3Fh and 40h) through the transfer buffer; a handle's properties from IOCTL 4400h |
 | `memory` | DPMI blocks (0501h, 0502h), 4 KiB granular; the free memory from 0500h |
-| `env` | the arguments from the command tail (offset 80h of the segment prefix), the variables from the environment block, the program's name, the system name `dos` |
+| `env` | the arguments from the command tail (offset 80h of the segment prefix), divided as DOS's C compilers divide it (0.3.0), the first element as its starter gave it (`KAL_ARG0`, 0.3.0), the variables from the environment block, the program's name, the system name `dos` |
+| `process` | EXEC (int 21h, 4B00h), the started program run to its end before the start returns, its status from 4Dh (0.3.0) |
 | `time` | the BIOS tick count at 0040:006C (54.925494 ms, made monotonic across midnight); the wall clock from int 21h 2Ah and 2Ch, read as UTC; a sleep by int 15h, 86h |
 | `fs` | the current directory and each volume as supplied directories (`C:\WORK`, `C:`, `Z:`), a directory held as its name; open, create (5Bh refuses a name that exists), truncate, seek, transfers at an offset, find first and next for enquiry and listing, make and remove a directory, remove, rename, a file's time (5700h, 5701h) and a volume's capacity (36h) |
 | `terminal` | the console's mode by bit 5 of its device word (cooked: line assembly and echo; raw: every byte as typed), ANSI.SYS's sequences where it answers int 2Fh 1A00h, the size from the BIOS data area |
@@ -121,8 +123,7 @@ name that exists, which is the rename that does not replace
 first and is not atomic. A name that holds DOS's `\` or a volume's `:` is
 refused, as a name that ascends is.
 
-Absent (openkal clause 6.2): contexts, processes as openkal states them, the
-network, and regions --- DOS cannot reserve an address apart from backing it: the
+Absent (openkal clause 6.2): contexts, the network, and regions --- DOS cannot reserve an address apart from backing it: the
 DPMI host CWSDPMI is DPMI 0.90 and refuses 0504h (measured), which is the case
 `openkal/region.h` names for leaving the interface out. DOSBox Staging's console
 accepts the request for raw mode and stays cooked (measured);
@@ -130,7 +131,7 @@ accepts the request for raw mode and stays cooked (measured);
 
 0.2.0 is written against openkal 0.26, and nothing but the specification's
 version changes; `openkal-dos-tools` carries the same version, as the two are one
-archive. What 0.26 requires is of `openkal.process`, which is absent here: a
+archive. What 0.26 requires is of `openkal.process`, which was absent until 0.3.0: a
 start bounded by the environment alone (clause 7.6) and a unit claimed only
 where a reference can be made (clause 7.18). What a program receives is bounded
 by DOS alone already: the command tail of the segment prefix holds at most 127
@@ -149,6 +150,68 @@ with the image in its `.oke` section, and the runner places the image through
 `examples/files` writes, appends and reads a file, renames it into a directory,
 lists, resizes (the extension reads as zero) and removes them, and returns 9
 (measured under DOSBox Staging).
+
+## Starting a program (0.3.0)
+
+`openkal.process` is provided through EXEC (int 21h, 4B00h). DOS runs one
+program: EXEC suspends the caller until the program it started ends, so
+`kal_process_spawn` returns after the end and `kal_process_wait` answers the
+status at once, int 21h 4Dh's (`KAL_PROCESS_PROP_RUNS_TO_END`, openkal clause
+7.19). A program ended by Ctrl-C is reported ended with 130, one ended by a
+critical error ended with its code. `TERMINATE` and `CHANNEL` are not claimed;
+`BOUND_LIFETIME` is, a started program being unable to outlive its starter;
+`EXIT_STATUS`, `STREAM_PASSING`, `NULL_STREAMS` and `ONE_STRING` are claimed. A
+started program of this implementation enters protected mode through the DPMI
+host already resident, as a client of its own.
+
+| what a start gives | how it reaches the started program |
+|---|---|
+| the vector after the first element | the command tail: a blank before each element, and an element that is empty or holds a blank or a quote quoted, its quotes preceded by a backslash and the backslashes before a quote doubled; `KAL_SPAWN_ONE_STRING` joins the elements as they are |
+| the first element | `KAL_ARG0=<the program's name>\|<first element>` among the variables: DOS gives a program no first element, only the name EXEC was given; a program of this implementation reads it where the name is its own, and does not list it among its variables |
+| the variables | an environment block of their own in conventional memory (DPMI 0100h) |
+| the directory it runs in | DOS's current drive and directory for the call, restored after it |
+| the three streams | for the call, the caller's handle table (PSP:34h) holds at positions 0, 1 and 2 the caller's own handles, those it placed, or NUL opened for the position, then DOS's AUX and PRN at 3 and 4, and nothing else; the table is restored after |
+| the resource preference | `KAL_RESOURCES` among the variables, which `kal_env_resources` reads |
+
+THE STARTED PROGRAM RECEIVES NO OTHER HANDLE (clause 7.13). DOS gives a started
+program every handle of its starter that was opened to be inherited, which is
+every handle DOS's 3Ch, 3Dh and 5Bh open: the stub's own file, the files a
+program holds. Measured: a copy that probes DOS handles 5 to 19 finds only its
+own program's file, which its stub opens, while its starter holds a file open;
+with the caller's handle table left as it was, it finds the starter's too.
+
+THE BOUNDS ARE DOS'S (clause 7.6): the command tail holds 126 bytes before its
+carriage return and an environment 32 KiB, and a start beyond either is
+`kal_err_no_space`; nothing is shortened. A start that cannot happen is refused
+by its reason before DOS is asked (a name that is not there, a directory, an
+entry without `=`), and EXEC's own refusals are mapped: not found, access
+denied, no memory, an environment DOS does not take (`kal_err_no_space`), a file
+that is no program (`kal_err_not_program`).
+
+THE TAIL IS DIVIDED AS DOS'S C COMPILERS DIVIDE IT. Blanks separate; a double
+quote begins or ends a part in which they do not; backslashes before a quote are
+halved, and an odd one makes the quote a character; other backslashes are
+themselves. 0.2.0 divided at blanks alone, so `"a b"` arrived as two arguments
+with their quotes, and no starter could pass an argument holding a blank.
+
+`kal_interfaces()` names the nine interfaces the manifest states. Until 0.3.0
+it named five, leaving out `exec`, `fs` and `terminal`.
+
+`tests/starts`, C beneath openkal-musl on openkal-platform 0.31.2's row with this
+repository's openkal-dos, run by dirun under DOSBox Staging 0.83.0-2 (where the
+program is itself started by REDIR, a DJGPP program): `posix_spawn` starts the
+program again with the first element `kid`, `a b`, an empty argument, `q"uote`
+and `C:\A B\`, and a variable set by `setenv`, and `waitpid` reads its status 3;
+a copy's standard output placed on a file writes the file, and on `/dev/null`
+writes nothing; a copy finds no handle of its starter's; an absent name is
+`ENOENT`; a tail of more than 126 bytes is `E2BIG`. The program ends with 42.
+
+The examples and tests name openkal-platform 0.31.2, whose group holds openkal
+0.26 (under 0.28.0 the build refused the specification's version), and enable
+its runner. `tests/fault` writes at offset 0x7ffffff0 of the block rather than
+0xfffffff0: under the platform's runner the program is a DPMI client started by
+REDIR, and the address 16 bytes below its block is REDIR's memory, where the
+write did not fault (measured with openkal-dos 0.2.0, status 3 in place of 139).
 
 ## The row's conventions
 
@@ -172,7 +235,7 @@ Windows and refuses a file that is no ELF32 i386 executable; and that the
 examples and the tests, built for `i686-dos-musl` with this repository's
 openkal-dos and seal and run under DOSBox Staging, print what they state and end
 with their statuses: `examples/hello` 7 (unoptimised and optimised),
-`examples/files` 9, `tests/fault` 139, `tests/stack` 0 (sixty-four frames of
+`examples/files` 9, `tests/starts` 42 (0.3.0), `tests/fault` 139, `tests/stack` 0 (sixty-four frames of
 8 KiB within the default stack) and `tests/stack-small` 139 (the same recursion
 with a stack of 64 KiB, stopped by the guard page).
 

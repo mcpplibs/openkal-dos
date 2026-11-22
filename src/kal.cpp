@@ -2,9 +2,9 @@
 //
 // DOS divides its services as openkal does for three interfaces: handles 0 to 2 are the standard
 // streams (int 21h, 3Fh and 40h), the program ends with a status (4Ch), and memory beyond the
-// first megabyte is the DPMI host's (int 31h, 0501h). The interfaces DOS has no counterpart for
-// --- contexts, processes as openkal states them, the network --- are absent rather than present
-// and failing (openkal clause 6.2).
+// first megabyte is the DPMI host's (int 31h, 0501h). A program is started by EXEC and has ended
+// when EXEC returns (process.cpp, 0.3.0). The interfaces DOS has no counterpart for --- contexts,
+// the network --- are absent rather than present and failing (openkal clause 6.2).
 #include <openkal/abort.h>
 #include <openkal/memory.h>
 #include <openkal/stream.h>
@@ -171,8 +171,11 @@ int kal_memory_info(kal_memory_status* out) {
 // ── version ─────────────────────────────────────────────────────────────────
 kal_u64 kal_version(void) { return KAL_VERSION; }
 
+// The interfaces the manifest states (`[kernel-abi] provides-interfaces'). Until 0.3.0 the word
+// named five of the eight, leaving out exec, fs and terminal, which the implementation provides.
 kal_u64 kal_interfaces(void) {
-    return KAL_IFACE_ABORT | KAL_IFACE_STREAM | KAL_IFACE_MEMORY | KAL_IFACE_ENV | KAL_IFACE_TIME;
+    return KAL_IFACE_ABORT | KAL_IFACE_STREAM | KAL_IFACE_MEMORY | KAL_IFACE_ENV | KAL_IFACE_TIME
+         | KAL_IFACE_EXEC | KAL_IFACE_FS | KAL_IFACE_TERMINAL | KAL_IFACE_PROCESS;
 }
 
 }  // extern "C"

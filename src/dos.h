@@ -8,6 +8,7 @@
 // THE BLOCK is [loadable segments][the record's page][the guard page][the stack]; the stack's top
 // is the block's end.
 #pragma once
+#include <openkal/fs.h>
 
 namespace okdos {
 
@@ -77,6 +78,25 @@ void install_faults();
 // overflow is a page fault; where the host refuses, a canary checked at the program's end.
 void guard_stack();
 void check_stack();
+
+// openkal.process (process.cpp, 0.3.0) and the volume (fs.cpp): the whole name of a program beneath
+// a directory, in `out' (kPathMax bytes), or the reason there is none; a directory's whole name.
+constexpr u32 kPathMax = 128;
+int program_path(kal_dir base, const char* name, kal_uintptr len, char* out);
+const char* directory_path(kal_dir d);
+
+// THE NAME A STARTED PROGRAM OBSERVES AS ITS OWN (0.3.0, clause 7.6). DOS gives a program no first
+// element: the name EXEC was given is written after its environment, and a program finds its file
+// by it. A starter of this implementation writes `KAL_ARG0=<that name>|<the first element>' among
+// the variables; the program it starts reads the first element there where the name is its own,
+// and a variable inherited through a program that does not read it names another program's file.
+// The variable is the implementation's and is not among the variables a program enumerates.
+inline constexpr char kArg0[] = "KAL_ARG0=";
+inline constexpr u32 kArg0Len = sizeof kArg0 - 1;
+inline bool names_arg0(const char* e) {
+    for (u32 i = 0; i < kArg0Len; ++i) if (e[i] != kArg0[i]) return false;
+    return true;
+}
 
 // Days from 1970-01-01 to a civil date (H. Hinnant's algorithm).
 inline long long days_from_civil(long long y, unsigned m, unsigned d) {

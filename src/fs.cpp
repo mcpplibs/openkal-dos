@@ -226,6 +226,22 @@ void preopen_table() {
 
 namespace okdos {
 bool append_handle(u16 handle) { return handle < 256 && g_append[handle]; }
+
+// WHAT openkal.process NEEDS OF THE VOLUME (process.cpp, 0.3.0): the whole name of a program beneath
+// a directory, with the reason there is none to start, and a directory's whole name.
+int program_path(kal_dir base, const char* name, kal_uintptr len, char* out) {
+    if (int e = join(base, name, len, out)) return e;
+    if (len == 1 && name[0] == '.') return kal_err_is_directory;
+    const int a = attributes(out);
+    if (a < 0) return kal_err_not_found;
+    if (a & 0x10) return kal_err_is_directory;
+    return kal_ok;
+}
+
+const char* directory_path(kal_dir d) {
+    const directory* x = dir_of(d);
+    return x ? x->path : nullptr;
+}
 }
 
 extern "C" {

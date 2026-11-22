@@ -1,6 +1,7 @@
 // openkal.env on DOS: the arguments are the command tail of the program's segment prefix (PSP),
-// split at blanks; position zero is the name DOS started the program by; the variables are the
-// environment block's NAME=VALUE strings.
+// divided as DOS's C compilers divide it (start.cpp); position zero is the starter's first element
+// where it travelled (KAL_ARG0, dos.h), the name DOS started the program by otherwise; the variables
+// are the environment block's NAME=VALUE strings, KAL_ARG0 not among them.
 #include <openkal/env.h>
 
 #include "dos.h"
@@ -21,12 +22,12 @@ kal_intptr give(const char* s, kal_uintptr n, char* out, kal_uintptr cap) {
 
 const char* environment() { return reinterpret_cast<const char*>(low(static_cast<u32>(self().h->env_segment) * 16u)); }
 
-// The I-th NAME=VALUE string, or null.
+// The I-th NAME=VALUE string, or null; the implementation's KAL_ARG0 is passed over.
 const char* variable(kal_uintptr index) {
     const char* p = environment();
-    for (kal_uintptr i = 0; *p; ++i) {
-        if (i == index) return p;
-        p += length(p) + 1;
+    for (kal_uintptr i = 0; *p; p += length(p) + 1) {
+        if (names_arg0(p)) continue;
+        if (i++ == index) return p;
     }
     return nullptr;
 }
@@ -76,6 +77,20 @@ kal_intptr kal_env_loader(char*, kal_uintptr) { return -kal_err_not_found; }
 
 kal_intptr kal_env_system(char* out, kal_uintptr cap) { return give("dos", 3, out, cap); }
 
-int kal_env_resources(void) { return KAL_RESOURCES_ECONOMY; }
+// THE RESOURCE PREFERENCE (openkal 0.23): KAL_RESOURCES where a starter wrote one (0.3.0), as the
+// other implementations read it; economy otherwise, this environment's memory being small.
+int kal_env_resources(void) {
+    char v[16];
+    const kal_intptr n = kal_env_var("KAL_RESOURCES", 13, v, sizeof v);
+    const auto is = [&](const char* w) {
+        const kal_uintptr k = length(w);
+        if (n != static_cast<kal_intptr>(k)) return false;
+        for (kal_uintptr i = 0; i < k; ++i) if (v[i] != w[i]) return false;
+        return true;
+    };
+    return is("performance") ? KAL_RESOURCES_PERFORMANCE
+         : is("balanced")    ? KAL_RESOURCES_BALANCED
+                             : KAL_RESOURCES_ECONOMY;
+}
 
 }  // extern "C"

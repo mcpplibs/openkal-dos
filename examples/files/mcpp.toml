@@ -10,4 +10,5 @@ kind = "bin"
 main = "src/main.cpp"
 
 [target.i686-dos-musl]
-platform = "openkal-platform@0.28.0"
+platform = "openkal-platform@0.31.2"
+runner   = { enabled = true }

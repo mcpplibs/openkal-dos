@@ -1,0 +1,14 @@
+# openkal.process on DOS (0.3.0), through the C library: posix_spawn starts this program again by
+# EXEC with a vector, a variable and a stream placed on a file or on NUL, waitpid reads its status,
+# and the starts DOS cannot make are refused by their reasons. The program ends with 42.
+[package]
+name    = "starts"
+version = "0.1.0"
+
+[targets.starts]
+kind = "bin"
+main = "src/main.c"
+
+[target.i686-dos-musl]
+platform = "openkal-platform@0.31.2"
+runner   = { enabled = true }

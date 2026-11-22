@@ -8,22 +8,23 @@
 [package]
 namespace   = "mcpplibs"
 name        = "openkal-dos"
-version     = "0.1.1"
+version     = "0.3.0"
 description = "An implementation of openkal on DOS through DPMI (technical experiment only)"
 license     = "Apache-2.0"
 provides    = ["mcpp:kernel-abi=openkal"]
 authors     = ["mcpplibs"]
 repo        = "https://github.com/mcpplibs/openkal-dos"
 
-# The interfaces DOS has a counterpart for. Absent (openkal clause 6.2): contexts, processes as
-# openkal states them, the network, and regions --- the DPMI host reserves no address apart from
-# backing it (CWSDPMI is DPMI 0.90 and refuses 0504h, measured).
+# The interfaces DOS has a counterpart for; `openkal.process' is EXEC, a started program run to its
+# end before the start returns (0.3.0, openkal clause 7.19). Absent (openkal clause 6.2): contexts,
+# the network, and regions --- the DPMI host reserves no address apart from backing it (CWSDPMI is
+# DPMI 0.90 and refuses 0504h, measured).
 [kernel-abi]
 provides-interfaces = ["openkal.abort", "openkal.env", "openkal.exec", "openkal.fs", "openkal.memory",
-                       "openkal.stream", "openkal.terminal", "openkal.time"]
+                       "openkal.process", "openkal.stream", "openkal.terminal", "openkal.time"]
 
 [dependencies]
-openkal = "^0.25.0"
+openkal = "^0.26.0"
 
 # With no C library this package runs the initialisers and calls `main'; `standalone' is the
 # arrangement beneath a C library written above openkal (openkal-musl names it so on
